@@ -10,6 +10,7 @@ Copy `.env.example` to `.env` and fill in real values locally. Never commit `.en
 |----------------|----------|----------------------------------------------------------------------|
 | `PORT`         | No       | Port the API listens on. Defaults to `5000` if unset.               |
 | `DATABASE_URL` | Yes*     | PostgreSQL connection string, e.g. `postgresql://user:pass@host:5432/dbname`. Required for `GET /api/health` (and any future DB-backed route) to succeed -- the server itself still starts without it, but those routes will report a degraded/disconnected state. |
+| `JWT_SECRET`   | Yes      | Random secret used to sign/verify JWTs. Required for `/api/auth/*` routes. |
 
 ## Database Setup
 
@@ -44,6 +45,28 @@ so re-running it against a database that already has the schema is safe.
 > Note: RLS only takes effect for non-superuser database roles, and the JWT
 > claim it checks (`request.jwt.role`) is only populated once request-level
 > auth middleware sets it -- that wiring is a separate, later sprint.
+
+## Authentication
+
+POST /api/auth/register
+Content-Type: application/json
+{ "email": "...", "password": "...", "role": "admin" | "manager" | "operator" }
+
+Returns `201` with the created user (no password) on success, `400` for
+missing/invalid fields, `409` if the email is already registered.
+
+> Self-registration with a caller-chosen role is a deliberate simplification
+> for early development. Before any real deployment this needs to become
+> admin-only user creation, or default to the lowest-privilege role.
+
+POST /api/auth/login
+Content-Type: application/json
+{ "email": "...", "password": "..." }
+
+Returns `200` with `{ "data": { "token": "<jwt>" } }` on success, `401` for
+invalid credentials. The token is valid for 24h and carries `user_id`,
+`email`, and `role` -- send it as `Authorization: Bearer <token>` on
+protected routes.
 
 ## Health Check
 
