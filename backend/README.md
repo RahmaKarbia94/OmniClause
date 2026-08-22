@@ -46,6 +46,57 @@ so re-running it against a database that already has the schema is safe.
 > claim it checks (`request.jwt.role`) is only populated once request-level
 > auth middleware sets it -- that wiring is a separate, later sprint.
 
+## Document Upload
+
+POST /api/documents/upload
+Authorization: Bearer <jwt>
+Content-Type: multipart/form-data
+
+
+Requires `multipart/form-data`, not JSON -- the file itself can''t be
+represented as JSON, so this route (unlike every other route in this
+API) reads a form body via `multer`, not `express.json()`.
+
+Form fields:
+- `file` -- the binary file. PDF or plain text only, 10MB max. Processed
+  entirely in memory; never written to disk.
+- `required_role` -- one of `admin`, `manager`, `operator`, `public`.
+  Gates who can retrieve this document later (enforced by the RLS
+  policy on `documents`, once retrieval routes exist).
+
+Requires an `admin` or `manager` role (via `requireRole`).
+
+Success (201):
+```json
+{
+  "status": "success",
+  "data": {
+    "document_id": "uuid-string",
+    "filename": "contract_fr.pdf",
+    "required_role": "manager",
+    "chunks_extracted": 12,
+    "created_at": "2026-08-20T22:28:03.348Z"
+  }
+}
+```
+
+Error cases: `400` (no file / missing or invalid `required_role`),
+`401` (missing/invalid token), `403` (role not `admin`/`manager`),
+`413` (file over 10MB), `415` (not PDF/TXT), `500` (extraction or DB
+failure).
+
+Example:
+```bash
+curl -i -X POST http://localhost:5000/api/documents/upload \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@contract.pdf" \
+  -F "required_role=manager"
+```
+
+> Text is stored raw and chunked (see `src/utils/textProcessor.ts`) but
+> no embeddings are generated yet -- `documents.embedding` stays `NULL`
+> until the AI embedding sprint.
+
 ## Authentication
 
 POST /api/auth/register
